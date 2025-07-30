@@ -1,0 +1,6 @@
+# Environment and token files
+.env
+tokens.json
+
+# Node modules
+node_modules/
