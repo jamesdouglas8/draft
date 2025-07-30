@@ -7,7 +7,8 @@ require('dotenv').config();
 
 const express = require('express');
 const axios = require('axios');
-const qs = require('querystring');  // Use Node's built-in querystring module
+const qs = require('querystring');  // Node's built-in module for query strings
+const fs = require('fs');          // File system module for saving tokens
 
 // Destructure environment variables
 const {
@@ -17,13 +18,16 @@ const {
   PORT = 3000
 } = process.env;
 
+// Fail fast if env vars missing
+if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
+  console.error('ERROR: Missing CLIENT_ID, CLIENT_SECRET, or REDIRECT_URI in .env');
+  process.exit(1);
+}
+
 const app = express();
 
 /**
  * Suggests the best available player not already on the team.
- * @param {string[]} currentTeam - Array of player names already drafted.
- * @param {string[]} availablePlayers - Array of remaining player names.
- * @returns {string} The suggested player or a fallback message.
  */
 function suggestBestPick(currentTeam = [], availablePlayers = []) {
   if (!Array.isArray(availablePlayers)) {
@@ -33,7 +37,7 @@ function suggestBestPick(currentTeam = [], availablePlayers = []) {
   return suggestion || 'No player available';
 }
 
-// Redirect root to /auth for convenience
+// Redirect root to /auth
 app.get('/', (_req, res) => {
   res.redirect('/auth');
 });
@@ -44,15 +48,21 @@ app.get('/auth', (_req, res) => {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
-    language: 'en-us'
+    scope: 'fspt-r',       // Fantasy Sports read-only scope
+    state: 'secureRandom'  // Optional CSRF mitigation
   });
   res.redirect(`https://api.login.yahoo.com/oauth2/request_auth?${params}`);
 });
 
 // 2️⃣ Callback route to exchange code for tokens
 app.get('/callback', async (req, res) => {
+  console.log('💬 /callback invoked with query:', req.query);
   const { code } = req.query;
-  if (!code) return res.status(400).send('Missing code');
+  if (!code) {
+    console.error('⚠️ No authorization code provided');
+    return res.status(400).send('Missing code');
+  }
+
   try {
     const tokenRes = await axios.post(
       'https://api.login.yahoo.com/oauth2/get_token',
@@ -68,11 +78,18 @@ app.get('/callback', async (req, res) => {
         }
       }
     );
-    console.log('Tokens:', tokenRes.data);
-    return res.send('✅ OAuth successful! Check the server console for tokens.');
+
+    const tokens = tokenRes.data;
+    console.log('Tokens received:', tokens);
+
+    // Persist tokens to file
+    fs.writeFileSync('tokens.json', JSON.stringify(tokens, null, 2));
+    console.log('✅ Tokens saved to tokens.json');
+
+    res.send('✅ OAuth successful! Tokens saved to tokens.json');
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    return res.status(500).send('Token exchange failed. See server logs.');
+    console.error('Token exchange error:', err.response?.data || err.message);
+    res.status(500).send('Token exchange failed. See server logs.');
   }
 });
 
