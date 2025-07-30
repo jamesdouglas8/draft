@@ -5,7 +5,7 @@ console.log("🏈 Fantasy Draft AI is live!");
 // Example: Basic player suggestion function (placeholder logic)
 function suggestBestPick(currentTeam, availablePlayers) {
   // Placeholder: Just return the first available player
-  return availablePlayers.length > 0 ? availablePlayers[0] : "No players available";
+  return availablePlayers.length > 0 ? availablePlayers[0] : "No player available";
 }
 
 // Example usage:
